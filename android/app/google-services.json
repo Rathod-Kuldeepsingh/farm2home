@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1063593091304",
+    "project_id": "farm2home-4bb0b",
+    "storage_bucket": "farm2home-4bb0b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1063593091304:android:78d6ad150fe9e5795da95d",
+        "android_client_info": {
+          "package_name": "com.example.farm2home"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBHebNh5exYZl4s7P7A4wzhizpuya-KZeU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
