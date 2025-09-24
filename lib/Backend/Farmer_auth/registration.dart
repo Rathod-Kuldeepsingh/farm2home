@@ -1,6 +1,8 @@
 // ignore_for_file: use_build_context_synchronously
 
+import 'package:farm2home/Backend/Farmer_auth/authfile.dart';
 import 'package:farm2home/Backend/Farmer_auth/login.dart';
+import 'package:farm2home/Backend/Farmer_auth/shared.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -55,66 +57,59 @@ class _RegistrationPageState extends State<RegistrationPage> {
     );
   }
 
-  void registerUser() async {
-    if (emailCtrl.text.isEmpty || passwordCtrl.text.isEmpty) {
-      showSnackBar(
-        "Email & Password required",
-        color: Colors.red,
-        icon: Icons.error,
-      );
-      return;
-    }
-
-    setState(() {
-      loading = true;
-    });
-
+  Future<bool> registerUser(String email, String password, String name) async {
     try {
       UserCredential userCredential = await _auth
           .createUserWithEmailAndPassword(
-            email: emailCtrl.text.trim(),
-            password: passwordCtrl.text.trim(),
+            email: email.trim(),
+            password: password.trim(),
           );
 
-      await userCredential.user?.updateDisplayName(nameCtrl.text.trim());
+      final user = userCredential.user;
+      if (user != null) {
+        // Update display name in Firebase Auth
+        await user.updateDisplayName(name);
 
-      Future<Map<String, dynamic>> getUserDetails() async {
-        final user = FirebaseAuth.instance.currentUser;
-        if (user == null) return {};
+        // Save token and login status locally
+        final token = await user.getIdToken();
+        await SharedPrefHelper.saveString("firebase_token", token!);
+        await SharedPrefHelper.saveBool("isLoggedIn", true);
 
-        final doc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .get();
-        return doc.data() ?? {};
+        // Save user details in Firestore
+
+        try {
+          final firestore = FirebaseFirestore.instance;
+          await firestore.collection('users').doc(user.uid).set({
+            'uid': user.uid,
+            'name': name,
+            'email': email,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+          print("User data saved successfully");
+        } catch (e) {
+          print("Error saving user data: $e");
+        }
+
+        return true;
       }
-
-      showSnackBar(
-        "Registration Successful",
-        color: Colors.green,
-        icon: Icons.check_circle,
-      );
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => LoginPage()),
-      );
-    } on FirebaseAuthException catch (e) {
-      String message = '';
-      if (e.code == 'email-already-in-use') {
-        message = 'Email already registered';
-      } else if (e.code == 'weak-password') {
-        message = 'Password is too weak';
-      } else {
-        message = e.message ?? 'Registration Failed';
-      }
-
-      showSnackBar(message, color: Colors.red, icon: Icons.error);
-    } finally {
-      setState(() {
-        loading = false;
-      });
+      return false;
+    } catch (e) {
+      throw e;
     }
+  }
+
+  Future<Map<String, dynamic>?> getUserDetails() async {
+    final user = _auth.currentUser;
+    if (user != null) {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      if (doc.exists) {
+        return doc.data();
+      }
+    }
+    return null;
   }
 
   @override
@@ -250,7 +245,45 @@ class _RegistrationPageState extends State<RegistrationPage> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                          onPressed: loading ? null : registerUser,
+                          onPressed: loading
+                              ? null
+                              : () async {
+                                  setState(() => loading = true);
+                                  try {
+                                    bool success =
+                                        await AuthService.registerUser(
+                                          emailCtrl.text,
+                                          passwordCtrl.text,
+                                          nameCtrl.text,
+                                        );
+                                    if (success) {
+                                      AuthService.showSnackBar(
+                                        context,
+                                        "Account created successfully!",
+                                      );
+                                      Navigator.pushReplacement(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => LoginPage(),
+                                        ),
+                                      );
+                                    } else {
+                                      AuthService.showSnackBar(
+                                        context,
+                                        "Failed to create account",
+                                        color: Colors.red,
+                                      );
+                                    }
+                                  } catch (e) {
+                                    AuthService.showSnackBar(
+                                      context,
+                                      "Error: $e",
+                                      color: Colors.red,
+                                    );
+                                  } finally {
+                                    setState(() => loading = false);
+                                  }
+                                },
                           child: loading
                               ? CircularProgressIndicator(color: Colors.white)
                               : Text(

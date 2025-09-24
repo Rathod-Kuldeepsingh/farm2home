@@ -1,6 +1,8 @@
 // ignore_for_file: use_build_context_synchronously
 
 import 'dart:convert';
+import 'package:farm2home/Backend/Farmer_auth/authfile.dart';
+import 'package:farm2home/Backend/Farmer_auth/login.dart';
 import 'package:farm2home/Frontend/Farmer/Add_product.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -16,17 +18,15 @@ class ProductListPage extends StatefulWidget {
 
 class _ProductListPageState extends State<ProductListPage> {
   late Future<List<dynamic>> products;
-  final String baseUrl = "http://127.0.0.1:8000/products";
-
+  final String baseUrl = "https://api-farm2home.onrender.com/my-products";
+  final userDetails = AuthService.getUserDetails();
   @override
   void initState() {
     super.initState();
-    products = fetchProducts();
+    products = fetchMyProducts();
   }
 
-
-
- void showSnackBar(
+  void showSnackBar(
     String message, {
     Color color = Colors.green,
     IconData? icon,
@@ -60,61 +60,68 @@ class _ProductListPageState extends State<ProductListPage> {
     );
   }
 
-  
-  Future<List<dynamic>> fetchProducts() async {
-    try {
-      final res = await http.get(Uri.parse(baseUrl));
-      if (res.statusCode == 200) {
-        return jsonDecode(res.body);
-      } else {
-        throw Exception("Failed to load products: ${res.body}");
-      }
-    } catch (e) {
-      debugPrint("🔥 Error fetching products: $e");
-      return [];
-    }
-  }
-
-  Future<void> deleteProduct(String productId) async {
-  final user = FirebaseAuth.instance.currentUser;
-  final firebaseToken = await user?.getIdToken();
-
-  if (firebaseToken == null) {
-
-    showSnackBar("User Not logged in" ,color: Colors.red,);
-    return;
-  }
-
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (_) => const Center(child: CircularProgressIndicator()),
-  );
-
+  Future<List<dynamic>> fetchMyProducts() async {
   try {
-    // Send the id_token as form data
-    final res = await http.delete(
-      Uri.parse("$baseUrl/$productId"),
-      headers: {"Content-Type": "application/x-www-form-urlencoded"},
-      body: {"id_token": firebaseToken},
+    // Get current Firebase user's ID token
+    String? idToken = await FirebaseAuth.instance.currentUser!.getIdToken();
+
+    final res = await http.get(
+      Uri.parse("$baseUrl"),
+      headers: {
+        "id-token": ?idToken, // Important!
+      },
     );
 
-    Navigator.of(context).pop(); // Close loader
-
-    if (res.statusCode == 200 || res.statusCode == 204) {
-        showSnackBar("Product Deleted" , color: Colors.green);
-      setState(() {
-        products = fetchProducts();
-      });
+    if (res.statusCode == 200) {
+      return jsonDecode(res.body);
     } else {
-      throw Exception("Failed to delete product: ${res.statusCode}");
+      throw Exception("Failed to load products: ${res.body}");
     }
   } catch (e) {
-    Navigator.of(context).pop();
-    showSnackBar("Error deleting product $e", color: Colors.red);
+    debugPrint("🔥 Error fetching products: $e");
+    return [];
   }
 }
 
+  Future<void> deleteProduct(String productId) async {
+    final user = FirebaseAuth.instance.currentUser;
+    final firebaseToken = await user?.getIdToken();
+
+    if (firebaseToken == null) {
+      showSnackBar("User Not logged in", color: Colors.red);
+      return;
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) =>
+          const Center(child: CircularProgressIndicator(color: Colors.green)),
+    );
+
+    try {
+      // Send the id_token as form data
+      final res = await http.delete(
+        Uri.parse("$baseUrl/$productId"),
+        headers: {"Content-Type": "application/x-www-form-urlencoded"},
+        body: {"id_token": firebaseToken},
+      );
+
+      Navigator.of(context).pop(); // Close loader
+
+      if (res.statusCode == 200 || res.statusCode == 204) {
+        showSnackBar("Product Deleted", color: Colors.green);
+        setState(() {
+          products = fetchMyProducts();
+        });
+      } else {
+        throw Exception("Failed to delete product: ${res.statusCode}");
+      }
+    } catch (e) {
+      Navigator.of(context).pop();
+      showSnackBar("Error deleting product $e", color: Colors.red);
+    }
+  }
 
   Future<void> _confirmUpdate(
     BuildContext context,
@@ -129,7 +136,7 @@ class _ProductListPageState extends State<ProductListPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text("Cancel",style: TextStyle(color: Colors.red),),
+            child: const Text("Cancel", style: TextStyle(color: Colors.red)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
@@ -161,7 +168,7 @@ class _ProductListPageState extends State<ProductListPage> {
 
       if (result == true) {
         setState(() {
-          products = fetchProducts();
+          products = fetchMyProducts();
         });
       }
     }
@@ -311,7 +318,7 @@ class _ProductListPageState extends State<ProductListPage> {
 
   Future<void> _refreshProducts() async {
     setState(() {
-      products = fetchProducts();
+      products = fetchMyProducts();
     });
     await products;
   }
@@ -325,12 +332,14 @@ class _ProductListPageState extends State<ProductListPage> {
           color: Colors.white, // Change color
           size: 30, // Change size
         ),
-        title: const Text(
-          "Farm2Home",
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
+        title: Center(
+          child: const Text(
+            "Farm2Home",
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
           ),
         ),
         backgroundColor: Colors.green,
@@ -361,11 +370,46 @@ class _ProductListPageState extends State<ProductListPage> {
                   ),
                 ),
               ),
-              accountName: Text(
-                "Kuldeepsingh",
-                style: TextStyle(fontWeight: FontWeight.bold),
+              accountName: FutureBuilder<Map<String, dynamic>?>(
+                future: AuthService.getUserDetails(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return Text(
+                      "Loading...",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    );
+                  } else if (snapshot.hasError) {
+                    return Text(
+                      "Error",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    );
+                  } else if (!snapshot.hasData) {
+                    return Text(
+                      "",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    );
+                  } else {
+                    final userDetails = snapshot.data!;
+                    return Text(
+                      userDetails['name'] ?? "",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    );
+                  }
+                },
               ),
-              accountEmail: Text("kuldeep@example.com"),
+              accountEmail: FutureBuilder<Map<String, dynamic>?>(
+                future: AuthService.getUserDetails(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return Text("");
+                  } else if (snapshot.hasData) {
+                    final userDetails = snapshot.data!;
+                    return Text(userDetails['email'] ?? "");
+                  } else {
+                    return Text("");
+                  }
+                },
+              ),
             ),
 
             // Menu Items
@@ -391,7 +435,9 @@ class _ProductListPageState extends State<ProductListPage> {
                   DrawerTile(
                     icon: Icons.logout,
                     title: 'Logout',
-                    onTap: () => Navigator.pop(context),
+                    onTap: () {
+                      AuthService.logoutUser(context);
+                    },
                   ),
                 ],
               ),
@@ -414,7 +460,7 @@ class _ProductListPageState extends State<ProductListPage> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(
               child: CircularProgressIndicator(
-                color: Colors.black,
+                color: Colors.green,
                 backgroundColor: Colors.white,
               ),
             );
@@ -438,25 +484,21 @@ class _ProductListPageState extends State<ProductListPage> {
           }
         },
       ),
-     floatingActionButton: FloatingActionButton(
-  onPressed: () async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => AddProductPage(
-        )
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => AddProductPage()),
+          );
+          if (result == true) {
+            setState(() {
+              products = fetchMyProducts();
+            });
+          }
+        },
+        backgroundColor: Colors.green,
+        child: const Icon(Icons.add, color: Colors.white),
       ),
-    );
-    if (result == true) {
-      setState(() {
-        products = fetchProducts();
-      });
-    }
-  },
-  backgroundColor: Colors.green,
-  child: const Icon(Icons.add, color: Colors.white),
-),
-
     );
   }
 }

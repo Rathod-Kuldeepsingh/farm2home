@@ -23,7 +23,7 @@ class _AddProductPageState extends State<AddProductPage> {
   File? _image;
   bool isLoading = false;
   final picker = ImagePicker();
-  final String baseUrl = "http://127.0.0.1:8000/products"; // FastAPI endpoint
+  final String baseUrl = "https://api-farm2home.onrender.com/products"; // FastAPI endpoint
 
   late TextEditingController nameCtrl;
   late TextEditingController priceCtrl;

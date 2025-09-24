@@ -1,5 +1,7 @@
-// ignore_for_file: use_build_context_synchronously
+// ignore_for_file: use_build_context_synchronously, unused_import, unused_field
 
+import 'package:farm2home/Backend/Farmer_auth/authfile.dart';
+import 'package:farm2home/Backend/Farmer_auth/shared.dart';
 import 'package:farm2home/Frontend/Farmer/Product_Upload.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -19,88 +21,41 @@ class _LoginPageState extends State<LoginPage> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   bool loading = false;
+Future<void> loginUser() async {
+    setState(() => loading = true);
 
-  void showSnackBar(
-    String message, {
-    Color color = Colors.green,
-    IconData? icon,
-  }) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            if (icon != null) ...[
-              Icon(icon, color: Colors.white),
-              SizedBox(width: 10),
-            ],
-            Expanded(
-              child: Text(
-                message,
-                style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: color,
-        behavior: SnackBarBehavior.floating,
-        margin: EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        duration: Duration(seconds: 3),
-      ),
-    );
-  }
+    try {
+      bool success = await AuthService.loginUser(
+        emailCtrl.text.trim(),
+        passwordCtrl.text.trim(),
+      );
 
-  void loginUser() async {
-    if (emailCtrl.text.isEmpty || passwordCtrl.text.isEmpty) {
-      showSnackBar(
-        "Email & Password required",
+      if (success) {
+        AuthService.showSnackBar(
+          context,
+          "Login Successful",
+          color: Colors.green,
+          icon: Icons.check_circle,
+        );
+        
+        Navigator.pushReplacementNamed(context, "/product");
+      }
+    } catch (e) {
+      AuthService.showSnackBar(
+        context,
+        "Login Failed: $e",
         color: Colors.red,
         icon: Icons.error,
       );
-      return;
-    }
-
-    setState(() {
-      loading = true;
-    });
-
-    try {
-      await _auth.signInWithEmailAndPassword(
-        email: emailCtrl.text.trim(),
-        password: passwordCtrl.text.trim(),
-      );
-
-      showSnackBar(
-        "Login Successful",
-        color: Colors.green,
-        icon: Icons.check_circle,
-      );
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => ProductListPage()),
-      );
-    } on FirebaseAuthException catch (e) {
-      String message = '';
-      if (e.code == 'user-not-found') {
-        message = 'No user found for that email';
-      } else if (e.code == 'wrong-password') {
-        message = 'Incorrect password';
-      } else {
-        message = e.message ?? 'Login Failed';
-      }
-
-      showSnackBar(message, color: Colors.red, icon: Icons.error);
     } finally {
-      setState(() {
-        loading = false;
-      });
+      setState(() => loading = false);
     }
   }
+  
+
+
+ 
+
 
   @override
   Widget build(BuildContext context) {
@@ -271,3 +226,4 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 }
+
